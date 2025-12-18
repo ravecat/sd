@@ -50,3 +50,4 @@ test-output
 context_portal
 
 *.prompt.md
+**/tasks.json

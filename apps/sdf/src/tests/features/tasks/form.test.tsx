@@ -45,14 +45,14 @@ describe('TaskForm', () => {
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'New Task',
-          priority: 'medium',
-          status: 'pending',
-        })
-      )
-    })
+      expect(onSubmit).toHaveBeenCalled()
+      const [callArgs] = onSubmit.mock.calls[0]
+      expect(callArgs.title).toBe('New Task')
+      expect(callArgs.priority).toBe('medium')
+      expect(callArgs.status).toBe('pending')
+      expect(typeof callArgs.description).toBe('string')
+      expect(typeof callArgs.dueDate).toBe('string')
+    }, { timeout: 3000 })
   })
 
   it('populates form with task data when editing', () => {

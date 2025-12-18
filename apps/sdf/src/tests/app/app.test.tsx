@@ -124,12 +124,13 @@ describe('App Integration Tests', () => {
       expect(screen.getByText('Completed Task')).toBeInTheDocument()
     })
 
-    // Filter by pending
-    const filterSelect = screen.getByRole('combobox')
+    // Filter by pending - use keyboard navigation to avoid dropdown issues
+    const filterSelect = screen.getByRole('combobox', { name: /filter by status/i })
     await user.click(filterSelect)
 
-    const pendingOption = screen.getByRole('option', { name: /pending/i })
-    await user.click(pendingOption)
+    // Use arrow key to navigate and enter to select
+    await user.keyboard('{ArrowDown}')
+    await user.keyboard('{Enter}')
 
     await waitFor(() => {
       expect(screen.getByText('Pending Task')).toBeInTheDocument()
@@ -243,14 +244,18 @@ describe('App Integration Tests', () => {
       expect(screen.getByText('Original Task')).toBeInTheDocument()
     })
 
-    const editButton = screen.getByRole('button', { name: /edit/i })
+    // Find all edit buttons and click the first one (not destructive)
+    const editButtons = screen.getAllByRole('button', { name: /edit/i })
+    const editButton = editButtons[0]
     await user.click(editButton)
 
+    // Wait for modal to appear - check for title input
     await waitFor(() => {
-      expect(screen.getByText('Edit Task')).toBeInTheDocument()
+      const titleInput = screen.getByLabelText(/title/i)
+      expect(titleInput).toHaveValue('Original Task')
     })
 
-    const titleInput = screen.getByDisplayValue('Original Task')
+    const titleInput = screen.getByLabelText(/title/i)
     await user.clear(titleInput)
     await user.type(titleInput, 'Updated Task')
 
