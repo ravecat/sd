@@ -56,20 +56,31 @@ defmodule Sdb.Tasks.Task do
   end
 
   defp generate_id(changeset) do
-    # Check if ID is already in the changeset or the original data
+    # Only generate ID if it doesn't exist in either changeset or original data
     case get_field(changeset, :id) do
       nil ->
-        # Check original data
-        case changeset.data do
-          %{id: existing_id} when existing_id != nil ->
-            changeset  # Keep existing ID
-          _ ->
-            id = Ecto.UUID.generate()
-            put_change(changeset, :id, id)  # Generate new ID
+        # Check if there's an ID in the original data (check both string and atom keys)
+        case Map.get(changeset.data, :id) || Map.get(changeset.data, "id") do
+          nil ->
+            # No ID exists, generate one
+            id = generate_random_string(32)
+            put_change(changeset, :id, id)
+          existing_id when is_binary(existing_id) ->
+            # ID exists in original data, preserve it as a change
+            put_change(changeset, :id, existing_id)
         end
-      _ ->
-        changeset  # ID already exists in changeset
+      _existing_id ->
+        # ID already exists in changeset, don't generate new one
+        changeset
     end
+  end
+
+  defp generate_random_string(length) do
+    :crypto.strong_rand_bytes(length)
+    |> Base.encode64()
+    |> binary_part(0, length)
+    |> String.replace(~r/[^a-zA-Z0-9]/, "")
+    |> String.slice(0, length)
   end
 
   defp generate_timestamps(changeset) do

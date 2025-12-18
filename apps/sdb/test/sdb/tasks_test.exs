@@ -1,285 +1,283 @@
 defmodule Sdb.TasksTest do
-  use ExUnit.Case, async: false
+  use Sdb.TasksCase, async: false
 
-  alias Sdb.Tasks
-  import Ecto.Changeset
-
-  # Helper function to extract errors from changeset
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_atom(key), key) |> to_string()
-      end)
-    end)
-  end
-
-  setup do
-    # Use a unique temporary file for each test
-    temp_file = System.tmp_dir!() |> Path.join("tasks_test_#{System.unique_integer()}.json")
-
-    # Configure the test application to use our temp file
-    Application.put_env(:sdb, :tasks_json_path, temp_file)
-
-    # Start the GenServer for each test with a unique name
-    name = :"TasksTest_#{System.unique_integer()}"
-    {:ok, pid} = Tasks.start_link(name: name)
-
-    on_exit(fn ->
-      # Clean up: stop the GenServer and remove the temp file
-      if Process.alive?(pid) do
-        GenServer.stop(pid)
-      end
-      File.rm(temp_file)
-    end)
-
-    # Override the GenServer calls to use the test-specific name
-    {:ok, %{temp_file: temp_file, name: name}}
-  end
-
-  describe "list_tasks/0" do
-    test "returns empty list when no tasks exist", %{name: name} do
-      assert Tasks.list_tasks(name) == []
+  describe "list_tasks/1" do
+    test "returns empty list when no tasks exist", %{server: server} do
+      assert Tasks.list_tasks(server) == []
     end
 
-    test "returns all tasks when tasks exist", %{name: name} do
-      {:ok, task1} = Tasks.create_task(%{"title" => "Task 1", "priority" => "high", "status" => "pending"}, name)
-      {:ok, task2} = Tasks.create_task(%{"title" => "Task 2", "priority" => "low", "status" => "completed"}, name)
+    test "returns all tasks", %{server: server} do
+      task1 = insert_task(server, %{"title" => "Task 1"})
+      task2 = insert_task(server, %{"title" => "Task 2"})
 
-      tasks = Tasks.list_tasks(name)
+      tasks = Tasks.list_tasks(server)
+
       assert length(tasks) == 2
       assert Enum.any?(tasks, fn t -> t["id"] == task1["id"] end)
       assert Enum.any?(tasks, fn t -> t["id"] == task2["id"] end)
     end
   end
 
-  describe "get_task/1" do
-    test "returns nil when task not found" do
-      assert Tasks.get_task("non-existent-id") == nil
+  describe "get_task/2" do
+    test "returns task by id", %{server: server} do
+      task = insert_task(server, %{"title" => "Find me"})
+
+      found_task = Tasks.get_task(task["id"], server)
+
+      assert found_task["id"] == task["id"]
+      assert found_task["title"] == "Find me"
     end
 
-    test "returns task when found" do
-      {:ok, created_task} = Tasks.create_task(%{"title" => "Test Task", "priority" => "medium", "status" => "pending"})
-
-      retrieved_task = Tasks.get_task(created_task["id"])
-      assert retrieved_task != nil
-      assert retrieved_task["id"] == created_task["id"]
-      assert retrieved_task["title"] == "Test Task"
+    test "returns nil for non-existent id", %{server: server} do
+      assert Tasks.get_task("non-existent-id", server) == nil
     end
   end
 
-  describe "create_task/1" do
-    test "creates task with valid data" do
+  describe "create_task/2" do
+    test "creates task with valid attributes", %{server: server} do
       attrs = %{
         "title" => "New Task",
-        "description" => "Task description",
         "priority" => "high",
         "status" => "pending",
+        "description" => "Task description",
         "dueDate" => "2024-12-31"
       }
 
-      {:ok, task} = Tasks.create_task(attrs)
-
+      assert {:ok, task} = Tasks.create_task(attrs, server)
       assert task["title"] == "New Task"
-      assert task["description"] == "Task description"
       assert task["priority"] == "high"
       assert task["status"] == "pending"
+      assert task["description"] == "Task description"
       assert task["dueDate"] == "2024-12-31"
-      assert task["id"] != nil
-      assert task["createdAt"] != nil
-      assert task["updatedAt"] != nil
+      assert is_binary(task["id"])
+      assert is_binary(task["createdAt"])
+      assert is_binary(task["updatedAt"])
     end
 
-    test "creates task with only required fields" do
+    test "creates task with only required fields", %{server: server} do
       attrs = %{
         "title" => "Minimal Task",
         "priority" => "low",
         "status" => "in_progress"
       }
 
-      {:ok, task} = Tasks.create_task(attrs)
-
+      assert {:ok, task} = Tasks.create_task(attrs, server)
       assert task["title"] == "Minimal Task"
       assert task["priority"] == "low"
       assert task["status"] == "in_progress"
-      refute task["description"]
-      refute task["dueDate"]
-      assert task["id"] != nil
+      assert task["description"] == nil
+      assert task["dueDate"] == nil
     end
 
-    test "returns error with invalid data" do
+    test "returns error changeset for missing required fields", %{server: server} do
+      attrs = %{"description" => "Only description"}
+
+      assert {:error, changeset} = Tasks.create_task(attrs, server)
+      refute changeset.valid?
+
+      errors = errors_on(changeset)
+      assert "can't be blank" in errors[:title]
+      assert "can't be blank" in errors[:priority]
+      assert "can't be blank" in errors[:status]
+    end
+
+    test "returns error for invalid priority", %{server: server} do
       attrs = %{
-        "title" => "",
-        "priority" => "invalid",
-        "status" => "invalid"
+        "title" => "Task",
+        "priority" => "urgent",
+        "status" => "pending"
       }
 
-      {:error, changeset} = Tasks.create_task(attrs)
+      assert {:error, changeset} = Tasks.create_task(attrs, server)
       refute changeset.valid?
-      assert errors_on(changeset)[:title] == ["can't be blank"]
-      assert errors_on(changeset)[:priority] == ["is invalid"]
-      assert errors_on(changeset)[:status] == ["is invalid"]
+      assert "is invalid" in errors_on(changeset)[:priority]
     end
 
-    test "persists task to file" do
-      attrs = %{"title" => "Persistent Task", "priority" => "medium", "status" => "pending"}
+    test "returns error for invalid status", %{server: server} do
+      attrs = %{
+        "title" => "Task",
+        "priority" => "high",
+        "status" => "done"
+      }
 
-      {:ok, _task} = Tasks.create_task(attrs)
+      assert {:error, changeset} = Tasks.create_task(attrs, server)
+      refute changeset.valid?
+      assert "is invalid" in errors_on(changeset)[:status]
+    end
 
-      # Stop the GenServer and start a new one to test persistence
-      GenServer.stop(Tasks)
-      Tasks.start_link()
+    test "persists task to file", %{server: server, temp_file: temp_file} do
+      attrs = %{
+        "title" => "Persisted Task",
+        "priority" => "medium",
+        "status" => "pending"
+      }
 
-      tasks = Tasks.list_tasks()
+      {:ok, task} = Tasks.create_task(attrs, server)
+
+      # Read file directly to verify persistence
+      {:ok, content} = File.read(temp_file)
+      {:ok, %{"tasks" => tasks}} = Jason.decode(content)
+
       assert length(tasks) == 1
-      assert hd(tasks)["title"] == "Persistent Task"
+      assert hd(tasks)["id"] == task["id"]
+      assert hd(tasks)["title"] == "Persisted Task"
     end
   end
 
-  describe "update_task/2" do
-    test "updates existing task with valid data" do
-      {:ok, created_task} = Tasks.create_task(%{
-        "title" => "Original Task",
-        "priority" => "low",
-        "status" => "pending"
-      })
+  describe "update_task/3" do
+    test "updates task with valid attributes", %{server: server} do
+      task = insert_task(server, %{"title" => "Original", "priority" => "low"})
+      original_id = task["id"]
+      original_created_at = task["createdAt"]
 
-      update_attrs = %{
-        "title" => "Updated Task",
-        "priority" => "high",
-        "status" => "completed",
-        "description" => "Added description"
-      }
+      attrs = %{"title" => "Updated", "priority" => "high"}
 
-      {:ok, updated_task} = Tasks.update_task(created_task["id"], update_attrs)
-
-      assert updated_task["id"] == created_task["id"]
-      assert updated_task["title"] == "Updated Task"
+      assert {:ok, updated_task} = Tasks.update_task(original_id, attrs, server)
+      assert updated_task["id"] == original_id
+      assert updated_task["title"] == "Updated"
       assert updated_task["priority"] == "high"
-      assert updated_task["status"] == "completed"
-      assert updated_task["description"] == "Added description"
-      assert updated_task["createdAt"] == created_task["createdAt"]
-      assert updated_task["updatedAt"] != created_task["updatedAt"]
+      assert updated_task["createdAt"] == original_created_at
+      assert updated_task["updatedAt"] != task["updatedAt"]
     end
 
-    test "returns error when task not found" do
-      attrs = %{"title" => "Updated", "priority" => "high", "status" => "completed"}
+    test "returns error for non-existent task", %{server: server} do
+      attrs = %{"title" => "Won't work"}
 
-      assert Tasks.update_task("non-existent-id", attrs) == {:error, :not_found}
+      assert {:error, :not_found} = Tasks.update_task("non-existent-id", attrs, server)
     end
 
-    test "returns error with invalid update data" do
-      {:ok, task} = Tasks.create_task(%{
-        "title" => "Test Task",
-        "priority" => "low",
-        "status" => "pending"
-      })
+    test "returns error for invalid attributes", %{server: server} do
+      task = insert_task(server)
 
-      invalid_attrs = %{
-        "priority" => "invalid",
-        "status" => "invalid"
+      attrs = %{"priority" => "invalid_priority"}
+
+      assert {:error, changeset} = Tasks.update_task(task["id"], attrs, server)
+      refute changeset.valid?
+      assert "is invalid" in errors_on(changeset)[:priority]
+    end
+
+    test "persists update to file", %{server: server, temp_file: temp_file} do
+      task = insert_task(server, %{"title" => "Before Update"})
+
+      {:ok, _updated} = Tasks.update_task(task["id"], %{"title" => "After Update"}, server)
+
+      # Read file directly
+      {:ok, content} = File.read(temp_file)
+      {:ok, %{"tasks" => tasks}} = Jason.decode(content)
+
+      assert hd(tasks)["title"] == "After Update"
+    end
+  end
+
+  describe "delete_task/2" do
+    test "deletes existing task", %{server: server} do
+      task = insert_task(server)
+
+      assert {:ok, deleted_task} = Tasks.delete_task(task["id"], server)
+      assert deleted_task["id"] == task["id"]
+
+      # Verify task is gone
+      assert Tasks.get_task(task["id"], server) == nil
+      assert Tasks.list_tasks(server) == []
+    end
+
+    test "returns error for non-existent task", %{server: server} do
+      assert {:error, :not_found} = Tasks.delete_task("non-existent-id", server)
+    end
+
+    test "persists deletion to file", %{server: server, temp_file: temp_file} do
+      task = insert_task(server)
+
+      {:ok, _deleted} = Tasks.delete_task(task["id"], server)
+
+      # Read file directly
+      {:ok, content} = File.read(temp_file)
+      {:ok, %{"tasks" => tasks}} = Jason.decode(content)
+
+      assert tasks == []
+    end
+  end
+
+  describe "init/1" do
+    test "creates file if it doesn't exist" do
+      temp_dir = System.tmp_dir!()
+      new_file = Path.join(temp_dir, "new_tasks_#{System.unique_integer([:positive])}.json")
+      server_name = :"init_test_#{System.unique_integer([:positive])}"
+
+      # Ensure file doesn't exist
+      File.rm(new_file)
+      refute File.exists?(new_file)
+
+      # Start GenServer
+      {:ok, pid} = Tasks.start_link(name: server_name, path: new_file)
+
+      # File should now exist
+      assert File.exists?(new_file)
+      {:ok, content} = File.read(new_file)
+      assert {:ok, %{"tasks" => []}} = Jason.decode(content)
+
+      # Cleanup
+      GenServer.stop(pid)
+      File.rm(new_file)
+    end
+
+    test "loads existing tasks from file" do
+      temp_dir = System.tmp_dir!()
+      existing_file = Path.join(temp_dir, "existing_tasks_#{System.unique_integer([:positive])}.json")
+      server_name = :"load_test_#{System.unique_integer([:positive])}"
+
+      # Create file with existing task
+      existing_task = %{
+        "id" => "existing-id",
+        "title" => "Existing Task",
+        "priority" => "high",
+        "status" => "pending",
+        "createdAt" => "2024-01-01T00:00:00Z",
+        "updatedAt" => "2024-01-01T00:00:00Z"
       }
 
-      {:error, changeset} = Tasks.update_task(task["id"], invalid_attrs)
-      refute changeset.valid?
-      assert errors_on(changeset)[:priority] == ["is invalid"]
-      assert errors_on(changeset)[:status] == ["is invalid"]
+      File.write!(existing_file, Jason.encode!(%{"tasks" => [existing_task]}, pretty: true))
+
+      # Start GenServer
+      {:ok, pid} = Tasks.start_link(name: server_name, path: existing_file)
+
+      # Verify task was loaded
+      tasks = Tasks.list_tasks(server_name)
+      assert length(tasks) == 1
+      assert hd(tasks)["id"] == "existing-id"
+      assert hd(tasks)["title"] == "Existing Task"
+
+      # Cleanup
+      GenServer.stop(pid)
+      File.rm(existing_file)
     end
 
-    test "persists updates to file" do
-      {:ok, created_task} = Tasks.create_task(%{
-        "title" => "Original Task",
-        "priority" => "low",
-        "status" => "pending"
-      })
+    test "handles corrupted JSON file gracefully" do
+      temp_dir = System.tmp_dir!()
+      corrupted_file = Path.join(temp_dir, "corrupted_#{System.unique_integer([:positive])}.json")
+      server_name = :"corrupted_test_#{System.unique_integer([:positive])}"
 
-      update_attrs = %{"title" => "Updated Task", "priority" => "high", "status" => "completed"}
+      # Create corrupted file
+      File.write!(corrupted_file, "not valid json {{{")
 
-      {:ok, _updated_task} = Tasks.update_task(created_task["id"], update_attrs)
+      # Start GenServer - should handle gracefully
+      {:ok, pid} = Tasks.start_link(name: server_name, path: corrupted_file)
 
-      # Stop the GenServer and start a new one to test persistence
-      GenServer.stop(Tasks)
-      Tasks.start_link()
+      # Should have empty tasks
+      assert Tasks.list_tasks(server_name) == []
 
-      tasks = Tasks.list_tasks()
-      assert length(tasks) == 1
-      task = hd(tasks)
-      assert task["title"] == "Updated Task"
-      assert task["priority"] == "high"
-      assert task["status"] == "completed"
+      # Cleanup
+      GenServer.stop(pid)
+      File.rm(corrupted_file)
     end
   end
 
-  describe "delete_task/1" do
-    test "deletes existing task" do
-      {:ok, created_task} = Tasks.create_task(%{
-        "title" => "Task to Delete",
-        "priority" => "low",
-        "status" => "pending"
-      })
-
-      {:ok, deleted_task} = Tasks.delete_task(created_task["id"])
-
-      assert deleted_task["id"] == created_task["id"]
-      assert deleted_task["title"] == "Task to Delete"
-
-      assert Tasks.get_task(created_task["id"]) == nil
-      assert Tasks.list_tasks() == []
-    end
-
-    test "returns error when task not found" do
-      assert Tasks.delete_task("non-existent-id") == {:error, :not_found}
-    end
-
-    test "persists deletion to file" do
-      {:ok, task1} = Tasks.create_task(%{"title" => "Task 1", "priority" => "high", "status" => "pending"})
-      {:ok, task2} = Tasks.create_task(%{"title" => "Task 2", "priority" => "low", "status" => "completed"})
-
-      {:ok, _deleted_task} = Tasks.delete_task(task1["id"])
-
-      # Stop the GenServer and start a new one to test persistence
-      GenServer.stop(Tasks)
-      Tasks.start_link()
-
-      tasks = Tasks.list_tasks()
-      assert length(tasks) == 1
-      assert hd(tasks)["id"] == task2["id"]
-    end
-  end
-
-  describe "file handling" do
-    test "handles empty JSON file" do
-      temp_file = System.tmp_dir!() |> Path.join("empty_tasks.json")
-      File.write!(temp_file, "")
-
-      Application.put_env(:sdb, :tasks_json_path, temp_file)
-      GenServer.stop(Tasks)
-      Tasks.start_link()
-
-      assert Tasks.list_tasks() == []
-
-      {:ok, task} = Tasks.create_task(%{
-        "title" => "First Task",
-        "priority" => "high",
-        "status" => "pending"
-      })
-
-      assert task["title"] == "First Task"
-
-      File.rm(temp_file)
-    end
-
-    test "handles malformed JSON file" do
-      temp_file = System.tmp_dir!() |> Path.join("malformed_tasks.json")
-      File.write!(temp_file, "{ invalid json }")
-
-      Application.put_env(:sdb, :tasks_json_path, temp_file)
-      GenServer.stop(Tasks)
-      Tasks.start_link()
-
-      # Should recover and start with empty tasks
-      assert Tasks.list_tasks() == []
-
-      File.rm(temp_file)
-    end
+  # Helper to extract errors from changeset
+  defp errors_on(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_atom(key), key) |> to_string()
+      end)
+    end)
   end
 end

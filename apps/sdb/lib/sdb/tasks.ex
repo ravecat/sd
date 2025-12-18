@@ -13,7 +13,6 @@ defmodule Sdb.Tasks do
   """
 
   # Client API
-
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
     GenServer.start_link(__MODULE__, opts, name: name)
@@ -44,11 +43,10 @@ defmodule Sdb.Tasks do
     GenServer.call(server_name, {:delete_task, id})
   end
 
-  # Server Callbacks
-
   @impl true
-  def init(_opts) do
-    path = Application.fetch_env!(:sdb, :tasks_json_path)
+  def init(opts) do
+    # Allow path to be passed in opts for testing, otherwise use application config
+    path = Keyword.get(opts, :path) || Application.fetch_env!(:sdb, :tasks_json_path)
 
     # Ensure directory exists
     File.mkdir_p!(Path.dirname(path))
@@ -103,7 +101,10 @@ defmodule Sdb.Tasks do
 
       index ->
         existing_task = Enum.at(state.tasks, index)
-        changeset = Task.update_changeset(existing_task, attrs)
+
+        # Convert string keys to atom keys for Ecto changeset compatibility
+        existing_task_with_atoms = convert_keys_to_atoms(existing_task)
+        changeset = Task.update_changeset(existing_task_with_atoms, attrs)
 
         if changeset.valid? do
           updated_task = apply_changes(changeset)
@@ -111,15 +112,12 @@ defmodule Sdb.Tasks do
 
           case write_tasks_to_file(state.path, updated_tasks) do
             :ok ->
-              Logger.info("Updated task: #{id}")
               {:reply, {:ok, updated_task}, %{state | tasks: updated_tasks}}
 
-            {:error, reason} ->
-              Logger.error("Failed to update task: #{inspect(reason)}")
+            {:error, _reason} ->
               {:reply, {:error, :file_write_failed}, state}
           end
         else
-          Logger.warning("Invalid update data for task #{id}: #{inspect(changeset.errors)}")
           {:reply, {:error, changeset}, state}
         end
     end
@@ -146,8 +144,6 @@ defmodule Sdb.Tasks do
         end
     end
   end
-
-  # Private functions
 
   defp load_or_create_file(path) do
     case File.read(path) do
@@ -202,6 +198,51 @@ defmodule Sdb.Tasks do
   end
 
   defp apply_changes(changeset) do
-    Ecto.Changeset.apply_changes(changeset)
+    # Apply changes
+    result = Ecto.Changeset.apply_changes(changeset)
+
+    # Convert struct to map and ensure string keys
+    result_map = case result do
+      %_{} = struct -> Map.from_struct(struct)
+      map when is_map(map) -> map
+      _ -> %{}
+    end
+
+    # Convert atom keys to string keys recursively
+    convert_keys_to_strings(result_map)
+  end
+
+  defp convert_keys_to_strings(map) when is_map(map) do
+    Map.new(map, fn {key, value} ->
+      new_key = case key do
+        atom when is_atom(atom) -> Atom.to_string(atom)
+        string when is_binary(string) -> string
+        _ -> key
+      end
+
+      new_value = case value do
+        nested_map when is_map(nested_map) -> convert_keys_to_strings(nested_map)
+        other -> other
+      end
+
+      {new_key, new_value}
+    end)
+  end
+
+  defp convert_keys_to_atoms(map) when is_map(map) do
+    Map.new(map, fn {key, value} ->
+      new_key = case key do
+        atom when is_atom(atom) -> atom
+        string when is_binary(string) -> String.to_atom(string)
+        _ -> key
+      end
+
+      new_value = case value do
+        nested_map when is_map(nested_map) -> convert_keys_to_atoms(nested_map)
+        other -> other
+      end
+
+      {new_key, new_value}
+    end)
   end
 end

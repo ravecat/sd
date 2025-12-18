@@ -31,7 +31,7 @@ defmodule SdbWeb.ConnCase do
     end
   end
 
-  setup _tags do
+  setup _context do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end
