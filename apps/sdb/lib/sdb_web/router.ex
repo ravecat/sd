@@ -3,6 +3,8 @@ defmodule SdbWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :fetch_session
+    plug SdbWeb.Plugs.EnsureUserId
   end
 
   scope "/api", SdbWeb do

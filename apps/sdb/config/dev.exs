@@ -42,6 +42,9 @@ config :sdb, SdbWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :sdb, dev_routes: true
 
+# Configure allowed CORS origins for development
+config :sdb, :allowed_origins, ["http://localhost:5173", "http://localhost:4200"]
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 
@@ -52,5 +55,5 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-# Configure tasks JSON file path
-config :sdb, :tasks_json_path, "priv/tasks.json"
+# Configure tasks storage directory (per-user files: priv/tasks/{user_id}.json)
+config :sdb, :tasks_dir, "priv/tasks"

@@ -5,7 +5,9 @@ const API_BASE_URL = config.API_BASE_URL
 
 export const api = {
   async getTasks(): Promise<Task[]> {
-    const response = await fetch(`${API_BASE_URL}/tasks`)
+    const response = await fetch(`${API_BASE_URL}/tasks`, {
+      credentials: 'include',
+    })
     if (!response.ok) throw new Error('Failed to fetch tasks')
 
     const data = await response.json()
@@ -24,7 +26,9 @@ export const api = {
   },
 
   async getTask(id: string): Promise<Task | null> {
-    const response = await fetch(`${API_BASE_URL}/tasks/${id}`)
+    const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+      credentials: 'include',
+    })
 
     if (response.status === 404) return null
     if (!response.ok) throw new Error('Failed to fetch task')
@@ -47,6 +51,7 @@ export const api = {
   async createTask(input: CreateTaskInput): Promise<Task> {
     const response = await fetch(`${API_BASE_URL}/tasks`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task: input }),
     })
@@ -74,6 +79,7 @@ export const api = {
   async updateTask(id: string, input: UpdateTaskInput): Promise<Task | null> {
     const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
       method: 'PUT',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ task: input }),
     })
@@ -102,6 +108,7 @@ export const api = {
   async deleteTask(id: string): Promise<boolean> {
     const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
       method: 'DELETE',
+      credentials: 'include',
     })
 
     if (response.status === 404) {

@@ -6,18 +6,21 @@ defmodule SdbWeb.TaskController do
   action_fallback SdbWeb.FallbackController
 
   @doc """
-  List all tasks
+  List all tasks for current user
   """
   def index(conn, _params) do
-    tasks = Tasks.list_tasks()
+    user_id = conn.assigns.user_id
+    tasks = Tasks.list_tasks(user_id)
     render(conn, :index, tasks: tasks)
   end
 
   @doc """
-  Create a new task
+  Create a new task for current user
   """
   def create(conn, %{"task" => task_params}) do
-    case Tasks.create_task(task_params) do
+    user_id = conn.assigns.user_id
+
+    case Tasks.create_task(user_id, task_params) do
       {:ok, task} ->
         conn
         |> put_status(:created)
@@ -36,10 +39,12 @@ defmodule SdbWeb.TaskController do
   end
 
   @doc """
-  Show a specific task
+  Show a specific task for current user
   """
   def show(conn, %{"id" => id}) do
-    case Tasks.get_task(id) do
+    user_id = conn.assigns.user_id
+
+    case Tasks.get_task(user_id, id) do
       nil ->
         conn
         |> put_status(:not_found)
@@ -51,10 +56,12 @@ defmodule SdbWeb.TaskController do
   end
 
   @doc """
-  Update an existing task
+  Update an existing task for current user
   """
   def update(conn, %{"id" => id, "task" => task_params}) do
-    case Tasks.update_task(id, task_params) do
+    user_id = conn.assigns.user_id
+
+    case Tasks.update_task(user_id, id, task_params) do
       {:ok, task} ->
         render(conn, :show, task: task)
 
@@ -76,10 +83,12 @@ defmodule SdbWeb.TaskController do
   end
 
   @doc """
-  Delete a task
+  Delete a task for current user
   """
   def delete(conn, %{"id" => id}) do
-    case Tasks.delete_task(id) do
+    user_id = conn.assigns.user_id
+
+    case Tasks.delete_task(user_id, id) do
       {:ok, _task} ->
         conn
         |> put_status(:no_content)

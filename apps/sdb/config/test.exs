@@ -17,5 +17,8 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix,
   sort_verified_routes_query_params: true
 
-# Configure tasks JSON file path for tests
-config :sdb, :tasks_json_path, "test/tasks.json"
+# Configure tasks storage directory for tests (per-user files: test/tasks/{user_id}.json)
+config :sdb, :tasks_dir, "test/tasks"
+
+# Configure allowed CORS origins for tests
+config :sdb, :allowed_origins, ["http://localhost:5173"]

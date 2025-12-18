@@ -1,8 +1,8 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import type { Task, CreateTaskInput } from '~/shared/task/types'
-import { createTaskInputSchema } from '~/shared/task/schemas'
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { Task, CreateTaskInput } from '~/shared/task/types';
+import { createTaskInputSchema } from '~/shared/task/schemas';
 import {
   Form,
   FormControl,
@@ -10,23 +10,23 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '~/components/ui/form'
-import { Input } from '~/components/ui/input'
-import { Textarea } from '~/components/ui/textarea'
+} from '~/components/ui/form';
+import { Input } from '~/components/ui/input';
+import { Textarea } from '~/components/ui/textarea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '~/components/ui/select'
-import { Button } from '~/components/ui/button'
+} from '~/components/ui/select';
+import { Button } from '~/components/ui/button';
 
 interface TaskFormProps {
-  task?: Task
-  onSubmit: (data: CreateTaskInput) => void
-  onCancel?: () => void
-  isSubmitting?: boolean
+  task?: Task;
+  onSubmit: (data: CreateTaskInput) => void;
+  onCancel?: () => void;
+  isSubmitting?: boolean;
 }
 
 export function TaskForm({
@@ -44,7 +44,7 @@ export function TaskForm({
       status: task?.status || 'pending',
       dueDate: task?.dueDate || '',
     },
-  })
+  });
 
   useEffect(() => {
     form.reset({
@@ -53,8 +53,8 @@ export function TaskForm({
       priority: task?.priority || 'medium',
       status: task?.status || 'pending',
       dueDate: task?.dueDate || '',
-    })
-  }, [task, form])
+    });
+  }, [task, form]);
 
   return (
     <Form {...form}>
@@ -99,10 +99,7 @@ export function TaskForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Priority</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select priority" />
@@ -125,10 +122,7 @@ export function TaskForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Status</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select status" />
@@ -171,5 +165,5 @@ export function TaskForm({
         </div>
       </form>
     </Form>
-  )
+  );
 }

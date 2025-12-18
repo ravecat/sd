@@ -39,11 +39,19 @@ if config_env() == :prod do
 
   config :sdb, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  # Configure tasks JSON file path for production
-  tasks_json_path = System.get_env("TASKS_JSON_PATH") ||
-    raise "TASKS_JSON_PATH environment variable must be set in production"
+  # Configure tasks storage directory for production (per-user files: {dir}/{user_id}.json)
+  tasks_dir = System.get_env("TASKS_DIR") ||
+    raise "TASKS_DIR environment variable must be set in production"
 
-  config :sdb, :tasks_json_path, tasks_json_path
+  config :sdb, :tasks_dir, tasks_dir
+
+  # Configure allowed CORS origins for production
+  # Comma-separated list: "https://example.com,https://app.example.com"
+  allowed_origins =
+    System.get_env("ALLOWED_ORIGINS") ||
+      raise "ALLOWED_ORIGINS environment variable must be set in production"
+
+  config :sdb, :allowed_origins, String.split(allowed_origins, ",")
 
   config :sdb, SdbWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],

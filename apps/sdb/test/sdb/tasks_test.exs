@@ -1,40 +1,65 @@
 defmodule Sdb.TasksTest do
   use Sdb.TasksCase, async: false
 
-  describe "list_tasks/1" do
-    test "returns empty list when no tasks exist", %{server: server} do
-      assert Tasks.list_tasks(server) == []
+  describe "list_tasks/2" do
+    test "returns empty list when no tasks exist", %{server: server, user_id: user_id} do
+      assert Tasks.list_tasks(user_id, server) == []
     end
 
-    test "returns all tasks", %{server: server} do
-      task1 = insert_task(server, %{"title" => "Task 1"})
-      task2 = insert_task(server, %{"title" => "Task 2"})
+    test "returns all tasks for user", %{server: server, user_id: user_id} do
+      task1 = insert_task(server, user_id, %{"title" => "Task 1"})
+      task2 = insert_task(server, user_id, %{"title" => "Task 2"})
 
-      tasks = Tasks.list_tasks(server)
+      tasks = Tasks.list_tasks(user_id, server)
 
       assert length(tasks) == 2
       assert Enum.any?(tasks, fn t -> t["id"] == task1["id"] end)
       assert Enum.any?(tasks, fn t -> t["id"] == task2["id"] end)
     end
+
+    test "isolates tasks between users", %{server: server} do
+      user1 = Ecto.UUID.generate()
+      user2 = Ecto.UUID.generate()
+
+      insert_task(server, user1, %{"title" => "User 1 Task"})
+      insert_task(server, user2, %{"title" => "User 2 Task"})
+
+      user1_tasks = Tasks.list_tasks(user1, server)
+      user2_tasks = Tasks.list_tasks(user2, server)
+
+      assert length(user1_tasks) == 1
+      assert length(user2_tasks) == 1
+      assert hd(user1_tasks)["title"] == "User 1 Task"
+      assert hd(user2_tasks)["title"] == "User 2 Task"
+    end
   end
 
-  describe "get_task/2" do
-    test "returns task by id", %{server: server} do
-      task = insert_task(server, %{"title" => "Find me"})
+  describe "get_task/3" do
+    test "returns task by id for user", %{server: server, user_id: user_id} do
+      task = insert_task(server, user_id, %{"title" => "Find me"})
 
-      found_task = Tasks.get_task(task["id"], server)
+      found_task = Tasks.get_task(user_id, task["id"], server)
 
       assert found_task["id"] == task["id"]
       assert found_task["title"] == "Find me"
     end
 
-    test "returns nil for non-existent id", %{server: server} do
-      assert Tasks.get_task("non-existent-id", server) == nil
+    test "returns nil for non-existent id", %{server: server, user_id: user_id} do
+      assert Tasks.get_task(user_id, "non-existent-id", server) == nil
+    end
+
+    test "returns nil for task belonging to different user", %{server: server} do
+      user1 = Ecto.UUID.generate()
+      user2 = Ecto.UUID.generate()
+
+      task = insert_task(server, user1, %{"title" => "User 1 Task"})
+
+      assert Tasks.get_task(user2, task["id"], server) == nil
     end
   end
 
-  describe "create_task/2" do
-    test "creates task with valid attributes", %{server: server} do
+  describe "create_task/3" do
+    test "creates task with valid attributes", %{server: server, user_id: user_id} do
       attrs = %{
         "title" => "New Task",
         "priority" => "high",
@@ -43,7 +68,7 @@ defmodule Sdb.TasksTest do
         "dueDate" => "2024-12-31"
       }
 
-      assert {:ok, task} = Tasks.create_task(attrs, server)
+      assert {:ok, task} = Tasks.create_task(user_id, attrs, server)
       assert task["title"] == "New Task"
       assert task["priority"] == "high"
       assert task["status"] == "pending"
@@ -54,14 +79,14 @@ defmodule Sdb.TasksTest do
       assert is_binary(task["updatedAt"])
     end
 
-    test "creates task with only required fields", %{server: server} do
+    test "creates task with only required fields", %{server: server, user_id: user_id} do
       attrs = %{
         "title" => "Minimal Task",
         "priority" => "low",
         "status" => "in_progress"
       }
 
-      assert {:ok, task} = Tasks.create_task(attrs, server)
+      assert {:ok, task} = Tasks.create_task(user_id, attrs, server)
       assert task["title"] == "Minimal Task"
       assert task["priority"] == "low"
       assert task["status"] == "in_progress"
@@ -69,10 +94,10 @@ defmodule Sdb.TasksTest do
       assert task["dueDate"] == nil
     end
 
-    test "returns error changeset for missing required fields", %{server: server} do
+    test "returns error changeset for missing required fields", %{server: server, user_id: user_id} do
       attrs = %{"description" => "Only description"}
 
-      assert {:error, changeset} = Tasks.create_task(attrs, server)
+      assert {:error, changeset} = Tasks.create_task(user_id, attrs, server)
       refute changeset.valid?
 
       errors = errors_on(changeset)
@@ -81,41 +106,42 @@ defmodule Sdb.TasksTest do
       assert "can't be blank" in errors[:status]
     end
 
-    test "returns error for invalid priority", %{server: server} do
+    test "returns error for invalid priority", %{server: server, user_id: user_id} do
       attrs = %{
         "title" => "Task",
         "priority" => "urgent",
         "status" => "pending"
       }
 
-      assert {:error, changeset} = Tasks.create_task(attrs, server)
+      assert {:error, changeset} = Tasks.create_task(user_id, attrs, server)
       refute changeset.valid?
       assert "is invalid" in errors_on(changeset)[:priority]
     end
 
-    test "returns error for invalid status", %{server: server} do
+    test "returns error for invalid status", %{server: server, user_id: user_id} do
       attrs = %{
         "title" => "Task",
         "priority" => "high",
         "status" => "done"
       }
 
-      assert {:error, changeset} = Tasks.create_task(attrs, server)
+      assert {:error, changeset} = Tasks.create_task(user_id, attrs, server)
       refute changeset.valid?
       assert "is invalid" in errors_on(changeset)[:status]
     end
 
-    test "persists task to file", %{server: server, temp_file: temp_file} do
+    test "persists task to user's file", %{server: server, user_id: user_id, temp_dir: temp_dir} do
       attrs = %{
         "title" => "Persisted Task",
         "priority" => "medium",
         "status" => "pending"
       }
 
-      {:ok, task} = Tasks.create_task(attrs, server)
+      {:ok, task} = Tasks.create_task(user_id, attrs, server)
 
       # Read file directly to verify persistence
-      {:ok, content} = File.read(temp_file)
+      user_file = user_file_path(temp_dir, user_id)
+      {:ok, content} = File.read(user_file)
       {:ok, %{"tasks" => tasks}} = Jason.decode(content)
 
       assert length(tasks) == 1
@@ -124,15 +150,15 @@ defmodule Sdb.TasksTest do
     end
   end
 
-  describe "update_task/3" do
-    test "updates task with valid attributes", %{server: server} do
-      task = insert_task(server, %{"title" => "Original", "priority" => "low"})
+  describe "update_task/4" do
+    test "updates task with valid attributes", %{server: server, user_id: user_id} do
+      task = insert_task(server, user_id, %{"title" => "Original", "priority" => "low"})
       original_id = task["id"]
       original_created_at = task["createdAt"]
 
       attrs = %{"title" => "Updated", "priority" => "high"}
 
-      assert {:ok, updated_task} = Tasks.update_task(original_id, attrs, server)
+      assert {:ok, updated_task} = Tasks.update_task(user_id, original_id, attrs, server)
       assert updated_task["id"] == original_id
       assert updated_task["title"] == "Updated"
       assert updated_task["priority"] == "high"
@@ -140,58 +166,80 @@ defmodule Sdb.TasksTest do
       assert updated_task["updatedAt"] != task["updatedAt"]
     end
 
-    test "returns error for non-existent task", %{server: server} do
+    test "returns error for non-existent task", %{server: server, user_id: user_id} do
       attrs = %{"title" => "Won't work"}
 
-      assert {:error, :not_found} = Tasks.update_task("non-existent-id", attrs, server)
+      assert {:error, :not_found} = Tasks.update_task(user_id, "non-existent-id", attrs, server)
     end
 
-    test "returns error for invalid attributes", %{server: server} do
-      task = insert_task(server)
+    test "returns error for invalid attributes", %{server: server, user_id: user_id} do
+      task = insert_task(server, user_id)
 
       attrs = %{"priority" => "invalid_priority"}
 
-      assert {:error, changeset} = Tasks.update_task(task["id"], attrs, server)
+      assert {:error, changeset} = Tasks.update_task(user_id, task["id"], attrs, server)
       refute changeset.valid?
       assert "is invalid" in errors_on(changeset)[:priority]
     end
 
-    test "persists update to file", %{server: server, temp_file: temp_file} do
-      task = insert_task(server, %{"title" => "Before Update"})
+    test "returns error when updating another user's task", %{server: server} do
+      user1 = Ecto.UUID.generate()
+      user2 = Ecto.UUID.generate()
 
-      {:ok, _updated} = Tasks.update_task(task["id"], %{"title" => "After Update"}, server)
+      task = insert_task(server, user1, %{"title" => "User 1 Task"})
+
+      assert {:error, :not_found} = Tasks.update_task(user2, task["id"], %{"title" => "Hacked"}, server)
+    end
+
+    test "persists update to user's file", %{server: server, user_id: user_id, temp_dir: temp_dir} do
+      task = insert_task(server, user_id, %{"title" => "Before Update"})
+
+      {:ok, _updated} = Tasks.update_task(user_id, task["id"], %{"title" => "After Update"}, server)
 
       # Read file directly
-      {:ok, content} = File.read(temp_file)
+      user_file = user_file_path(temp_dir, user_id)
+      {:ok, content} = File.read(user_file)
       {:ok, %{"tasks" => tasks}} = Jason.decode(content)
 
       assert hd(tasks)["title"] == "After Update"
     end
   end
 
-  describe "delete_task/2" do
-    test "deletes existing task", %{server: server} do
-      task = insert_task(server)
+  describe "delete_task/3" do
+    test "deletes existing task", %{server: server, user_id: user_id} do
+      task = insert_task(server, user_id)
 
-      assert {:ok, deleted_task} = Tasks.delete_task(task["id"], server)
+      assert {:ok, deleted_task} = Tasks.delete_task(user_id, task["id"], server)
       assert deleted_task["id"] == task["id"]
 
       # Verify task is gone
-      assert Tasks.get_task(task["id"], server) == nil
-      assert Tasks.list_tasks(server) == []
+      assert Tasks.get_task(user_id, task["id"], server) == nil
+      assert Tasks.list_tasks(user_id, server) == []
     end
 
-    test "returns error for non-existent task", %{server: server} do
-      assert {:error, :not_found} = Tasks.delete_task("non-existent-id", server)
+    test "returns error for non-existent task", %{server: server, user_id: user_id} do
+      assert {:error, :not_found} = Tasks.delete_task(user_id, "non-existent-id", server)
     end
 
-    test "persists deletion to file", %{server: server, temp_file: temp_file} do
-      task = insert_task(server)
+    test "returns error when deleting another user's task", %{server: server} do
+      user1 = Ecto.UUID.generate()
+      user2 = Ecto.UUID.generate()
 
-      {:ok, _deleted} = Tasks.delete_task(task["id"], server)
+      task = insert_task(server, user1, %{"title" => "User 1 Task"})
+
+      assert {:error, :not_found} = Tasks.delete_task(user2, task["id"], server)
+      # Task should still exist for user1
+      assert Tasks.get_task(user1, task["id"], server) != nil
+    end
+
+    test "persists deletion to user's file", %{server: server, user_id: user_id, temp_dir: temp_dir} do
+      task = insert_task(server, user_id)
+
+      {:ok, _deleted} = Tasks.delete_task(user_id, task["id"], server)
 
       # Read file directly
-      {:ok, content} = File.read(temp_file)
+      user_file = user_file_path(temp_dir, user_id)
+      {:ok, content} = File.read(user_file)
       {:ok, %{"tasks" => tasks}} = Jason.decode(content)
 
       assert tasks == []
@@ -199,34 +247,33 @@ defmodule Sdb.TasksTest do
   end
 
   describe "init/1" do
-    test "creates file if it doesn't exist" do
-      temp_dir = System.tmp_dir!()
-      new_file = Path.join(temp_dir, "new_tasks_#{System.unique_integer([:positive])}.json")
+    test "creates directory if it doesn't exist" do
+      temp_dir = Path.join(System.tmp_dir!(), "new_tasks_dir_#{System.unique_integer([:positive])}")
       server_name = :"init_test_#{System.unique_integer([:positive])}"
 
-      # Ensure file doesn't exist
-      File.rm(new_file)
-      refute File.exists?(new_file)
+      # Ensure directory doesn't exist
+      File.rm_rf(temp_dir)
+      refute File.exists?(temp_dir)
 
       # Start GenServer
-      {:ok, pid} = Tasks.start_link(name: server_name, path: new_file)
+      {:ok, pid} = Tasks.start_link(name: server_name, base_dir: temp_dir)
 
-      # File should now exist
-      assert File.exists?(new_file)
-      {:ok, content} = File.read(new_file)
-      assert {:ok, %{"tasks" => []}} = Jason.decode(content)
+      # Directory should now exist
+      assert File.exists?(temp_dir)
+      assert File.dir?(temp_dir)
 
       # Cleanup
       GenServer.stop(pid)
-      File.rm(new_file)
+      File.rm_rf(temp_dir)
     end
 
-    test "loads existing tasks from file" do
-      temp_dir = System.tmp_dir!()
-      existing_file = Path.join(temp_dir, "existing_tasks_#{System.unique_integer([:positive])}.json")
+    test "loads existing tasks from user file" do
+      temp_dir = Path.join(System.tmp_dir!(), "existing_tasks_#{System.unique_integer([:positive])}")
       server_name = :"load_test_#{System.unique_integer([:positive])}"
+      user_id = Ecto.UUID.generate()
 
-      # Create file with existing task
+      # Create directory and user file with existing task
+      File.mkdir_p!(temp_dir)
       existing_task = %{
         "id" => "existing-id",
         "title" => "Existing Task",
@@ -236,39 +283,42 @@ defmodule Sdb.TasksTest do
         "updatedAt" => "2024-01-01T00:00:00Z"
       }
 
-      File.write!(existing_file, Jason.encode!(%{"tasks" => [existing_task]}, pretty: true))
+      user_file = Path.join(temp_dir, "#{user_id}.json")
+      File.write!(user_file, Jason.encode!(%{"tasks" => [existing_task]}, pretty: true))
 
       # Start GenServer
-      {:ok, pid} = Tasks.start_link(name: server_name, path: existing_file)
+      {:ok, pid} = Tasks.start_link(name: server_name, base_dir: temp_dir)
 
       # Verify task was loaded
-      tasks = Tasks.list_tasks(server_name)
+      tasks = Tasks.list_tasks(user_id, server_name)
       assert length(tasks) == 1
       assert hd(tasks)["id"] == "existing-id"
       assert hd(tasks)["title"] == "Existing Task"
 
       # Cleanup
       GenServer.stop(pid)
-      File.rm(existing_file)
+      File.rm_rf(temp_dir)
     end
 
     test "handles corrupted JSON file gracefully" do
-      temp_dir = System.tmp_dir!()
-      corrupted_file = Path.join(temp_dir, "corrupted_#{System.unique_integer([:positive])}.json")
+      temp_dir = Path.join(System.tmp_dir!(), "corrupted_#{System.unique_integer([:positive])}")
       server_name = :"corrupted_test_#{System.unique_integer([:positive])}"
+      user_id = Ecto.UUID.generate()
 
-      # Create corrupted file
-      File.write!(corrupted_file, "not valid json {{{")
+      # Create directory and corrupted user file
+      File.mkdir_p!(temp_dir)
+      user_file = Path.join(temp_dir, "#{user_id}.json")
+      File.write!(user_file, "not valid json {{{")
 
       # Start GenServer - should handle gracefully
-      {:ok, pid} = Tasks.start_link(name: server_name, path: corrupted_file)
+      {:ok, pid} = Tasks.start_link(name: server_name, base_dir: temp_dir)
 
-      # Should have empty tasks
-      assert Tasks.list_tasks(server_name) == []
+      # Should have empty tasks for this user
+      assert Tasks.list_tasks(user_id, server_name) == []
 
       # Cleanup
       GenServer.stop(pid)
-      File.rm(corrupted_file)
+      File.rm_rf(temp_dir)
     end
   end
 
