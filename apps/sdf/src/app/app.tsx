@@ -6,7 +6,7 @@ import { TaskList } from '~/features/tasks/list';
 import { TaskModal } from '~/features/tasks/modal';
 import { TaskFilter } from '~/features/tasks/filter';
 import { Button } from '~/components/ui/button';
-import { Plus, Loader2, Download, Upload } from 'lucide-react';
+import { Plus, Loader2, Download, Upload, Wine } from 'lucide-react';
 import { ThemeProvider } from '~/contexts/theme-context';
 import { ThemeToggle } from '~/components/theme-toggle';
 import { api } from '~/services/api';
@@ -98,13 +98,11 @@ export function App() {
       <div className="min-h-screen bg-background">
         <div className="container max-w-7xl mx-auto py-8 px-4">
           <div className="mb-8 flex justify-between items-start">
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight mb-2">
-                Task Manager
+            <div className="flex items-center gap-3">
+              <Wine className="h-10 w-10 text-purple-600 dark:text-purple-400" />
+              <h1 className="text-4xl font-bold tracking-tight">
+                Taskana
               </h1>
-              <p className="text-muted-foreground">
-                Manage your tasks efficiently with our simple task manager
-              </p>
             </div>
             <ThemeToggle />
           </div>
