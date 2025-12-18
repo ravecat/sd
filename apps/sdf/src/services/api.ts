@@ -124,4 +124,22 @@ export const api = {
     // DELETE returns 204 with empty body on success
     return response.status === 204
   },
+
+  async exportTasks(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/tasks/export`, {
+      credentials: 'include',
+    })
+
+    if (!response.ok) throw new Error('Failed to export tasks')
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'tasks.json'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  },
 }

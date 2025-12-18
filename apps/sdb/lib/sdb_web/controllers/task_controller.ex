@@ -105,4 +105,17 @@ defmodule SdbWeb.TaskController do
         |> json(%{error: to_string(reason)})
     end
   end
+
+  @doc """
+  Export all tasks for current user as JSON file
+  """
+  def export(conn, _params) do
+    user_id = conn.assigns.user_id
+    tasks = Tasks.list_tasks(user_id)
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> put_resp_header("content-disposition", ~s(attachment; filename="tasks.json"))
+    |> send_resp(200, Jason.encode!(%{tasks: tasks}))
+  end
 end

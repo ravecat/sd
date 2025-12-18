@@ -13,6 +13,7 @@ vi.mock('~/services/api', () => ({
     createTask: vi.fn(),
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
+    exportTasks: vi.fn(),
   },
 }));
 
@@ -296,6 +297,46 @@ describe('App Integration Tests', () => {
           description: 'Updated Description',
         })
       );
+    });
+  });
+
+  it('exports tasks', async () => {
+    const user = userEvent.setup();
+    mockApi.getTasks.mockResolvedValueOnce([]);
+    mockApi.exportTasks.mockResolvedValueOnce(undefined);
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument();
+    });
+
+    const exportButton = screen.getByRole('button', { name: /export/i });
+    expect(exportButton).toBeInTheDocument();
+
+    await user.click(exportButton);
+
+    await waitFor(() => {
+      expect(mockApi.exportTasks).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('export button works with empty task list', async () => {
+    const user = userEvent.setup();
+    mockApi.getTasks.mockResolvedValueOnce([]);
+    mockApi.exportTasks.mockResolvedValueOnce(undefined);
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument();
+    });
+
+    const exportButton = screen.getByRole('button', { name: /export/i });
+    await user.click(exportButton);
+
+    await waitFor(() => {
+      expect(mockApi.exportTasks).toHaveBeenCalledOnce();
     });
   });
 });

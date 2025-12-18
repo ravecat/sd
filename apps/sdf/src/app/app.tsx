@@ -6,9 +6,10 @@ import { TaskList } from '~/features/tasks/list';
 import { TaskModal } from '~/features/tasks/modal';
 import { TaskFilter } from '~/features/tasks/filter';
 import { Button } from '~/components/ui/button';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Download } from 'lucide-react';
 import { ThemeProvider } from '~/contexts/theme-context';
 import { ThemeToggle } from '~/components/theme-toggle';
+import { api } from '~/services/api';
 
 export function App() {
   const {
@@ -59,6 +60,14 @@ export function App() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      await api.exportTasks();
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
+
   return (
     <ThemeProvider>
       <div className="min-h-screen bg-background">
@@ -83,10 +92,16 @@ export function App() {
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <TaskFilter value={filterStatus} onChange={setFilterStatus} />
-            <Button onClick={handleNewTask}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Task
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+              <Button onClick={handleNewTask}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Task
+              </Button>
+            </div>
           </div>
 
           {isLoading ? (
