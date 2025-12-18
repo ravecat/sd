@@ -47,6 +47,7 @@ defmodule Sdb.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:ecto, "~> 3.11"},
+      {:cors_plug, "~> 3.0"},
       {:repatch, "~> 1.1", only: :test}
     ]
   end
