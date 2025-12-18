@@ -1,0 +1,100 @@
+{
+  "name": "sdb",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/sdb/lib",
+  "projectType": "application",
+  "namedInputs": {
+    "production": [
+      "default",
+      "!{projectRoot}/**/*_test.exs",
+      "!{projectRoot}/**/*.spec.exs",
+      "!{projectRoot}/test/**/*"
+    ]
+  },
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix phx.server",
+        "cwd": "apps/sdb",
+        "color": true
+      },
+      "dependsOn": ["setup"],
+      "continuous": true
+    },
+    "setup": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix setup",
+        "cwd": "apps/sdb"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix deploy",
+        "cwd": "apps/sdb"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/lib/**/*.ex",
+        "{projectRoot}/lib/**/*.exs",
+        "{projectRoot}/mix.exs",
+        "{projectRoot}/mix.lock",
+        "{projectRoot}/config/**/*.exs",
+        "{projectRoot}/assets/**/*",
+        "!{projectRoot}/assets/node_modules/**/*"
+      ],
+      "outputs": ["{projectRoot}/_build", "{projectRoot}/priv/static"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix test",
+        "cwd": "apps/sdb"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/lib/**/*.ex",
+        "{projectRoot}/lib/**/*.exs",
+        "{projectRoot}/test/**/*.exs"
+      ]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix format --check-formatted",
+        "cwd": "apps/sdb"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix format",
+        "cwd": "apps/sdb"
+      }
+    },
+    "db:create": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix ecto.create",
+        "cwd": "apps/sdb"
+      }
+    },
+    "db:migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix ecto.migrate",
+        "cwd": "apps/sdb"
+      }
+    },
+    "db:reset": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "mix ecto.reset",
+        "cwd": "apps/sdb"
+      }
+    }
+  },
+  "tags": ["phoenix", "elixir", "backend"]
+}
