@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { App } from '~/app/app'
-import * as apiModule from '~/services/api'
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import NiceModal from '@ebay/nice-modal-react';
+import { App } from '~/app/app';
+import * as apiModule from '~/services/api';
+import { useTaskStore } from '~/stores/task-store';
 
 // Mock the API module
 vi.mock('~/services/api', () => ({
@@ -12,14 +14,32 @@ vi.mock('~/services/api', () => ({
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
   },
-}))
+}));
 
-const mockApi = apiModule.api as any
+const mockApi = apiModule.api as any;
+
+/**
+ * Custom render function that wraps App with NiceModal.Provider
+ */
+function renderApp() {
+  return render(
+    <NiceModal.Provider>
+      <App />
+    </NiceModal.Provider>
+  );
+}
 
 describe('App Integration Tests', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+    // Reset zustand store state before each test
+    useTaskStore.setState({
+      tasks: [],
+      isLoading: false,
+      error: null,
+      filterStatus: 'all',
+    });
+  });
 
   it('loads and displays tasks on mount', async () => {
     mockApi.getTasks.mockResolvedValueOnce([
@@ -39,21 +59,21 @@ describe('App Integration Tests', () => {
         createdAt: '2025-12-17T10:00:00Z',
         updatedAt: '2025-12-18T11:00:00Z',
       },
-    ])
+    ]);
 
-    render(<App />)
+    renderApp();
 
-    expect(screen.getByText('Loading tasks...')).toBeInTheDocument()
+    expect(screen.getByText('Loading tasks...')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('Test Task 1')).toBeInTheDocument()
-      expect(screen.getByText('Test Task 2')).toBeInTheDocument()
-    })
-  })
+      expect(screen.getByText('Test Task 1')).toBeInTheDocument();
+      expect(screen.getByText('Test Task 2')).toBeInTheDocument();
+    });
+  });
 
   it('creates a new task', async () => {
-    const user = userEvent.setup()
-    mockApi.getTasks.mockResolvedValueOnce([])
+    const user = userEvent.setup();
+    mockApi.getTasks.mockResolvedValueOnce([]);
     mockApi.createTask.mockResolvedValueOnce({
       id: '3',
       title: 'New Task',
@@ -62,29 +82,29 @@ describe('App Integration Tests', () => {
       priority: 'medium',
       createdAt: '2025-12-18T12:00:00Z',
       updatedAt: '2025-12-18T12:00:00Z',
-    })
+    });
 
-    render(<App />)
-
-    await waitFor(() => {
-      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument()
-    })
-
-    const newTaskButton = screen.getByRole('button', { name: /new task/i })
-    await user.click(newTaskButton)
+    renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText('Create New Task')).toBeInTheDocument()
-    })
+      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument();
+    });
 
-    const titleInput = screen.getByLabelText(/title/i)
-    await user.type(titleInput, 'New Task')
+    const newTaskButton = screen.getByRole('button', { name: /new task/i });
+    await user.click(newTaskButton);
 
-    const descriptionInput = screen.getByLabelText(/description/i)
-    await user.type(descriptionInput, 'New Description')
+    await waitFor(() => {
+      expect(screen.getByText('Create New Task')).toBeInTheDocument();
+    });
 
-    const submitButton = screen.getByRole('button', { name: /create task/i })
-    await user.click(submitButton)
+    const titleInput = screen.getByLabelText(/title/i);
+    await user.type(titleInput, 'New Task');
+
+    const descriptionInput = screen.getByLabelText(/description/i);
+    await user.type(descriptionInput, 'New Description');
+
+    const submitButton = screen.getByRole('button', { name: /create task/i });
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(mockApi.createTask).toHaveBeenCalledWith(
@@ -92,12 +112,12 @@ describe('App Integration Tests', () => {
           title: 'New Task',
           description: 'New Description',
         })
-      )
-    })
-  })
+      );
+    });
+  });
 
   it('filters tasks by status', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
     mockApi.getTasks.mockResolvedValueOnce([
       {
         id: '1',
@@ -115,31 +135,33 @@ describe('App Integration Tests', () => {
         createdAt: '2025-12-17T10:00:00Z',
         updatedAt: '2025-12-18T11:00:00Z',
       },
-    ])
+    ]);
 
-    render(<App />)
+    renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText('Pending Task')).toBeInTheDocument()
-      expect(screen.getByText('Completed Task')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Pending Task')).toBeInTheDocument();
+      expect(screen.getByText('Completed Task')).toBeInTheDocument();
+    });
 
     // Filter by pending - use keyboard navigation to avoid dropdown issues
-    const filterSelect = screen.getByRole('combobox', { name: /filter by status/i })
-    await user.click(filterSelect)
+    const filterSelect = screen.getByRole('combobox', {
+      name: /filter by status/i,
+    });
+    await user.click(filterSelect);
 
     // Use arrow key to navigate and enter to select
-    await user.keyboard('{ArrowDown}')
-    await user.keyboard('{Enter}')
+    await user.keyboard('{ArrowDown}');
+    await user.keyboard('{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByText('Pending Task')).toBeInTheDocument()
-      expect(screen.queryByText('Completed Task')).not.toBeInTheDocument()
-    })
-  })
+      expect(screen.getByText('Pending Task')).toBeInTheDocument();
+      expect(screen.queryByText('Completed Task')).not.toBeInTheDocument();
+    });
+  });
 
   it('toggles task status', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
     mockApi.getTasks.mockResolvedValueOnce([
       {
         id: '1',
@@ -149,7 +171,7 @@ describe('App Integration Tests', () => {
         createdAt: '2025-12-18T10:00:00Z',
         updatedAt: '2025-12-18T10:00:00Z',
       },
-    ])
+    ]);
 
     mockApi.updateTask.mockResolvedValueOnce({
       id: '1',
@@ -158,26 +180,26 @@ describe('App Integration Tests', () => {
       priority: 'high',
       createdAt: '2025-12-18T10:00:00Z',
       updatedAt: '2025-12-18T12:00:00Z',
-    })
+    });
 
-    render(<App />)
+    renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText('Test Task')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Test Task')).toBeInTheDocument();
+    });
 
-    const statusButton = screen.getByLabelText('Mark as completed')
-    await user.click(statusButton)
+    const statusButton = screen.getByLabelText('Mark as completed');
+    await user.click(statusButton);
 
     await waitFor(() => {
       expect(mockApi.updateTask).toHaveBeenCalledWith('1', {
         status: 'completed',
-      })
-    })
-  })
+      });
+    });
+  });
 
   it('deletes a task after confirmation', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
     mockApi.getTasks.mockResolvedValueOnce([
       {
         id: '1',
@@ -187,35 +209,35 @@ describe('App Integration Tests', () => {
         createdAt: '2025-12-18T10:00:00Z',
         updatedAt: '2025-12-18T10:00:00Z',
       },
-    ])
+    ]);
 
-    mockApi.deleteTask.mockResolvedValueOnce(true)
+    mockApi.deleteTask.mockResolvedValueOnce(true);
 
     // Mock window.confirm
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    render(<App />)
+    renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText('Task to Delete')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Task to Delete')).toBeInTheDocument();
+    });
 
-    const deleteButtons = screen.getAllByRole('button', { name: '' })
+    const deleteButtons = screen.getAllByRole('button', { name: '' });
     const deleteButton = deleteButtons.find((btn) =>
       btn.className.includes('destructive')
-    )
+    );
 
     if (deleteButton) {
-      await user.click(deleteButton)
+      await user.click(deleteButton);
 
       await waitFor(() => {
-        expect(mockApi.deleteTask).toHaveBeenCalledWith('1')
-      })
+        expect(mockApi.deleteTask).toHaveBeenCalledWith('1');
+      });
     }
-  })
+  });
 
   it('edits an existing task', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
     mockApi.getTasks.mockResolvedValueOnce([
       {
         id: '1',
@@ -226,7 +248,7 @@ describe('App Integration Tests', () => {
         createdAt: '2025-12-18T10:00:00Z',
         updatedAt: '2025-12-18T10:00:00Z',
       },
-    ])
+    ]);
 
     mockApi.updateTask.mockResolvedValueOnce({
       id: '1',
@@ -236,35 +258,35 @@ describe('App Integration Tests', () => {
       priority: 'high',
       createdAt: '2025-12-18T10:00:00Z',
       updatedAt: '2025-12-18T12:00:00Z',
-    })
+    });
 
-    render(<App />)
+    renderApp();
 
     await waitFor(() => {
-      expect(screen.getByText('Original Task')).toBeInTheDocument()
-    })
+      expect(screen.getByText('Original Task')).toBeInTheDocument();
+    });
 
     // Find all edit buttons and click the first one (not destructive)
-    const editButtons = screen.getAllByRole('button', { name: /edit/i })
-    const editButton = editButtons[0]
-    await user.click(editButton)
+    const editButtons = screen.getAllByRole('button', { name: /edit/i });
+    const editButton = editButtons[0];
+    await user.click(editButton);
 
     // Wait for modal to appear - check for title input
     await waitFor(() => {
-      const titleInput = screen.getByLabelText(/title/i)
-      expect(titleInput).toHaveValue('Original Task')
-    })
+      const titleInput = screen.getByLabelText(/title/i);
+      expect(titleInput).toHaveValue('Original Task');
+    });
 
-    const titleInput = screen.getByLabelText(/title/i)
-    await user.clear(titleInput)
-    await user.type(titleInput, 'Updated Task')
+    const titleInput = screen.getByLabelText(/title/i);
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Updated Task');
 
-    const descriptionInput = screen.getByDisplayValue('Original Description')
-    await user.clear(descriptionInput)
-    await user.type(descriptionInput, 'Updated Description')
+    const descriptionInput = screen.getByDisplayValue('Original Description');
+    await user.clear(descriptionInput);
+    await user.type(descriptionInput, 'Updated Description');
 
-    const submitButton = screen.getByRole('button', { name: /update task/i })
-    await user.click(submitButton)
+    const submitButton = screen.getByRole('button', { name: /update task/i });
+    await user.click(submitButton);
 
     await waitFor(() => {
       expect(mockApi.updateTask).toHaveBeenCalledWith(
@@ -273,7 +295,7 @@ describe('App Integration Tests', () => {
           title: 'Updated Task',
           description: 'Updated Description',
         })
-      )
-    })
-  })
-})
+      );
+    });
+  });
+});

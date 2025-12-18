@@ -105,11 +105,9 @@ export function TaskList({
               </Badge>
             </div>
 
-            {task.description && (
-              <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
-                {task.description}
-              </p>
-            )}
+            <p className="text-sm text-muted-foreground mt-3 line-clamp-1 min-h-[1.25rem]">
+              {task.description || '\u00A0'}
+            </p>
 
             {task.dueDate && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-3">

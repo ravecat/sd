@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import NiceModal, { useModal } from '@ebay/nice-modal-react'
 import type { Task, CreateTaskInput } from '~/shared/task/types'
 import {
   Dialog,
@@ -15,12 +16,8 @@ import { Calendar, Edit } from 'lucide-react'
 type ModalMode = 'view' | 'edit' | 'create'
 
 interface TaskModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
   mode: ModalMode
   task?: Task | null
-  onSubmit: (data: CreateTaskInput) => void
-  isSubmitting?: boolean
 }
 
 const priorityColors = {
@@ -35,25 +32,17 @@ const priorityLabels = {
   high: 'High',
 }
 
-export function TaskModal({
-  open,
-  onOpenChange,
-  mode: initialMode,
-  task,
-  onSubmit,
-  isSubmitting = false,
-}: TaskModalProps) {
+export const TaskModal = NiceModal.create(({ mode: initialMode, task }: TaskModalProps) => {
+  const modal = useModal()
   const [mode, setMode] = useState<ModalMode>(initialMode)
 
   const handleClose = () => {
-    onOpenChange(false)
-    // Reset to initial mode when closing
-    setTimeout(() => setMode(initialMode), 200)
+    modal.hide()
   }
 
   const handleSubmit = (data: CreateTaskInput) => {
-    onSubmit(data)
-    handleClose()
+    modal.resolve(data)
+    modal.hide()
   }
 
   const handleEdit = () => {
@@ -116,7 +105,6 @@ export function TaskModal({
           task={mode === 'edit' ? task || undefined : undefined}
           onSubmit={handleSubmit}
           onCancel={handleClose}
-          isSubmitting={isSubmitting}
         />
       )
     }
@@ -137,8 +125,11 @@ export function TaskModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={modal.visible} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        onAnimationEnd={() => !modal.visible && modal.remove()}
+      >
         <DialogHeader>
           <DialogTitle>{getTitle()}</DialogTitle>
           <DialogDescription>{getDescription()}</DialogDescription>
@@ -147,4 +138,4 @@ export function TaskModal({
       </DialogContent>
     </Dialog>
   )
-}
+})

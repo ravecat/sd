@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { Task, CreateTaskInput } from '~/shared/task/types'
@@ -44,6 +45,16 @@ export function TaskForm({
       dueDate: task?.dueDate || '',
     },
   })
+
+  useEffect(() => {
+    form.reset({
+      title: task?.title || '',
+      description: task?.description || '',
+      priority: task?.priority || 'medium',
+      status: task?.status || 'pending',
+      dueDate: task?.dueDate || '',
+    })
+  }, [task, form])
 
   return (
     <Form {...form}>
