@@ -6,6 +6,8 @@ import { TaskModal } from '~/features/tasks/modal'
 import { TaskFilter } from '~/features/tasks/filter'
 import { Button } from '~/components/ui/button'
 import { Plus, Loader2 } from 'lucide-react'
+import { ThemeProvider } from '~/contexts/theme-context'
+import { ThemeToggle } from '~/components/theme-toggle'
 
 export function App() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -129,14 +131,18 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container max-w-7xl mx-auto py-8 px-4">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold tracking-tight mb-2">Task Manager</h1>
-          <p className="text-muted-foreground">
-            Manage your tasks efficiently with our simple task manager
-          </p>
-        </div>
+    <ThemeProvider>
+      <div className="min-h-screen bg-background">
+        <div className="container max-w-7xl mx-auto py-8 px-4">
+          <div className="mb-8 flex justify-between items-start">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight mb-2">Task Manager</h1>
+              <p className="text-muted-foreground">
+                Manage your tasks efficiently with our simple task manager
+              </p>
+            </div>
+            <ThemeToggle />
+          </div>
 
         {error && (
           <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg">
@@ -177,6 +183,7 @@ export function App() {
         />
       </div>
     </div>
+    </ThemeProvider>
   )
 }
 
