@@ -39,6 +39,12 @@ if config_env() == :prod do
 
   config :sdb, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  # Configure tasks JSON file path for production
+  tasks_json_path = System.get_env("TASKS_JSON_PATH") ||
+    raise "TASKS_JSON_PATH environment variable must be set in production"
+
+  config :sdb, :tasks_json_path, tasks_json_path
+
   config :sdb, SdbWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [

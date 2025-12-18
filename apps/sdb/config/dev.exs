@@ -51,3 +51,6 @@ config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
+
+# Configure tasks JSON file path
+config :sdb, :tasks_json_path, "priv/tasks.json"

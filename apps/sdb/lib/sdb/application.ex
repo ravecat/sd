@@ -11,6 +11,7 @@ defmodule Sdb.Application do
       SdbWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:sdb, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Sdb.PubSub},
+      Sdb.Tasks,
       # Start a worker by calling: Sdb.Worker.start_link(arg)
       # {Sdb.Worker, arg},
       # Start to serve requests, typically the last entry

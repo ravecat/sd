@@ -47,6 +47,14 @@ defmodule SdbWeb do
     end
   end
 
+  def html do
+    quote do
+      import Phoenix.Controller
+
+      unquote(verified_routes())
+    end
+  end
+
   def verified_routes do
     quote do
       use Phoenix.VerifiedRoutes,

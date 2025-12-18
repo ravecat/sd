@@ -7,5 +7,7 @@ defmodule SdbWeb.Router do
 
   scope "/api", SdbWeb do
     pipe_through :api
+
+    resources "/tasks", TaskController, except: [:new, :edit]
   end
 end

@@ -46,3 +46,7 @@ Thumbs.db
 
 vite.config.*.timestamp*
 test-output
+
+context_portal
+
+*.prompt.md
