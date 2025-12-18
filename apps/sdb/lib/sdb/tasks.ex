@@ -42,6 +42,11 @@ defmodule Sdb.Tasks do
     GenServer.call(server_name, {:delete_task, user_id, task_id})
   end
 
+  @doc "Import tasks for a user from a list of task data"
+  def import_tasks(user_id, tasks_data, server_name \\ __MODULE__) do
+    GenServer.call(server_name, {:import_tasks, user_id, tasks_data})
+  end
+
   @impl true
   def init(opts) do
     # Get base directory from opts (for testing) or application config
@@ -144,6 +149,65 @@ defmodule Sdb.Tasks do
             Logger.error("Failed to delete task: #{inspect(reason)}")
             {:reply, {:error, :file_write_failed}, state}
         end
+    end
+  end
+
+  @impl true
+  def handle_call({:import_tasks, user_id, tasks_data}, _from, state) do
+    # Validate all tasks first
+    results =
+      Enum.map(tasks_data, fn task_data ->
+        changeset = Task.changeset(%{}, task_data)
+        {changeset.valid?, changeset, task_data}
+      end)
+
+    # Check if all tasks are valid
+    all_valid = Enum.all?(results, fn {valid?, _, _} -> valid? end)
+
+    if all_valid do
+      # Load existing tasks
+      existing_tasks = load_user_tasks(state.base_dir, user_id)
+
+      # Apply changes to all valid tasks
+      new_tasks =
+        results
+        |> Enum.map(fn {_, changeset, _} -> apply_changes(changeset) end)
+
+      # Merge: replace tasks with same ID, add new ones
+      existing_ids = MapSet.new(existing_tasks, fn t -> t["id"] end)
+      import_ids = MapSet.new(new_tasks, fn t -> t["id"] end)
+
+      # Keep existing tasks that don't have IDs being imported
+      kept_tasks = Enum.reject(existing_tasks, fn t -> MapSet.member?(import_ids, t["id"]) end)
+
+      # Combine kept tasks with imported tasks
+      merged_tasks = kept_tasks ++ new_tasks
+
+      case write_user_tasks(state.base_dir, user_id, merged_tasks) do
+        :ok ->
+          imported_count = length(new_tasks)
+          replaced_count = MapSet.size(MapSet.intersection(existing_ids, import_ids))
+          added_count = imported_count - replaced_count
+
+          Logger.info(
+            "Imported #{imported_count} tasks for user #{user_id} " <>
+            "(#{added_count} added, #{replaced_count} replaced)"
+          )
+          {:reply, {:ok, %{imported: imported_count, added: added_count, replaced: replaced_count}}, state}
+
+        {:error, reason} ->
+          Logger.error("Failed to import tasks: #{inspect(reason)}")
+          {:reply, {:error, :file_write_failed}, state}
+      end
+    else
+      # Collect errors from invalid changesets
+      errors =
+        results
+        |> Enum.filter(fn {valid?, _, _} -> not valid? end)
+        |> Enum.map(fn {_, changeset, _} -> changeset.errors end)
+
+      Logger.warning("Invalid tasks in import: #{inspect(errors)}")
+      {:reply, {:error, :invalid_tasks}, state}
     end
   end
 

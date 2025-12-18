@@ -142,4 +142,27 @@ export const api = {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   },
+
+  async importTasks(file: File): Promise<{ imported: number; added: number; replaced: number }> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(`${API_BASE_URL}/tasks/import`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to import tasks')
+    }
+
+    const data = await response.json()
+    return {
+      imported: data.imported,
+      added: data.added,
+      replaced: data.replaced,
+    }
+  },
 }

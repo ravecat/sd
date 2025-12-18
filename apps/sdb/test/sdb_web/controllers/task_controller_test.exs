@@ -321,4 +321,188 @@ defmodule SdbWeb.TaskControllerTest do
       assert hd(tasks)["id"] == "user-task"
     end
   end
+
+  describe "import/2" do
+    test "imports tasks from JSON file", %{conn: conn} do
+      tasks = [
+        %{
+          "id" => "import-1",
+          "title" => "Imported Task 1",
+          "priority" => "high",
+          "status" => "pending",
+          "createdAt" => "2024-12-18T10:00:00Z",
+          "updatedAt" => "2024-12-18T10:00:00Z"
+        },
+        %{
+          "id" => "import-2",
+          "title" => "Imported Task 2",
+          "priority" => "low",
+          "status" => "completed",
+          "createdAt" => "2024-12-18T11:00:00Z",
+          "updatedAt" => "2024-12-18T11:00:00Z"
+        }
+      ]
+
+      json_content = Jason.encode!(%{"tasks" => tasks})
+      {:ok, temp_file} = Plug.Upload.random_file("import")
+      File.write!(temp_file, json_content)
+
+      upload = %Plug.Upload{
+        path: temp_file,
+        filename: "tasks.json",
+        content_type: "application/json"
+      }
+
+      Repatch.patch(Tasks, :import_tasks, fn _user_id, imported_tasks ->
+        assert length(imported_tasks) == 2
+        {:ok, %{imported: 2, added: 2, replaced: 0}}
+      end)
+
+      conn = post(conn, ~p"/api/tasks/import", %{"file" => upload})
+
+      assert %{"message" => "Tasks imported successfully", "imported" => 2, "added" => 2, "replaced" => 0} =
+               json_response(conn, 200)
+
+      File.rm(temp_file)
+    end
+
+    test "imports tasks with direct array format", %{conn: conn} do
+      tasks = [
+        %{
+          "id" => "import-1",
+          "title" => "Task 1",
+          "priority" => "medium",
+          "status" => "in_progress"
+        }
+      ]
+
+      json_content = Jason.encode!(tasks)
+      {:ok, temp_file} = Plug.Upload.random_file("import")
+      File.write!(temp_file, json_content)
+
+      upload = %Plug.Upload{
+        path: temp_file,
+        filename: "tasks.json",
+        content_type: "application/json"
+      }
+
+      Repatch.patch(Tasks, :import_tasks, fn _user_id, imported_tasks ->
+        assert length(imported_tasks) == 1
+        {:ok, %{imported: 1, added: 1, replaced: 0}}
+      end)
+
+      conn = post(conn, ~p"/api/tasks/import", %{"file" => upload})
+
+      assert %{"message" => "Tasks imported successfully", "imported" => 1} =
+               json_response(conn, 200)
+
+      File.rm(temp_file)
+    end
+
+    test "returns error when file is missing", %{conn: conn} do
+      conn = post(conn, ~p"/api/tasks/import", %{})
+
+      assert %{"error" => "No file provided. Expected 'file' parameter."} =
+               json_response(conn, 400)
+    end
+
+    test "returns error for invalid JSON format", %{conn: conn} do
+      json_content = Jason.encode!(%{"not_tasks" => []})
+      {:ok, temp_file} = Plug.Upload.random_file("import")
+      File.write!(temp_file, json_content)
+
+      upload = %Plug.Upload{
+        path: temp_file,
+        filename: "tasks.json",
+        content_type: "application/json"
+      }
+
+      conn = post(conn, ~p"/api/tasks/import", %{"file" => upload})
+
+      assert %{"error" => error_msg} = json_response(conn, 422)
+      assert error_msg =~ "Invalid JSON format"
+
+      File.rm(temp_file)
+    end
+
+    test "returns error for malformed JSON", %{conn: conn} do
+      {:ok, temp_file} = Plug.Upload.random_file("import")
+      File.write!(temp_file, "not valid json {")
+
+      upload = %Plug.Upload{
+        path: temp_file,
+        filename: "tasks.json",
+        content_type: "application/json"
+      }
+
+      conn = post(conn, ~p"/api/tasks/import", %{"file" => upload})
+
+      assert %{"error" => error_msg} = json_response(conn, 422)
+      assert error_msg =~ "Invalid JSON"
+
+      File.rm(temp_file)
+    end
+
+    test "returns error for invalid task data", %{conn: conn} do
+      tasks = [
+        %{
+          "id" => "invalid-task",
+          "title" => "",
+          "priority" => "invalid",
+          "status" => "invalid"
+        }
+      ]
+
+      json_content = Jason.encode!(%{"tasks" => tasks})
+      {:ok, temp_file} = Plug.Upload.random_file("import")
+      File.write!(temp_file, json_content)
+
+      upload = %Plug.Upload{
+        path: temp_file,
+        filename: "tasks.json",
+        content_type: "application/json"
+      }
+
+      Repatch.patch(Tasks, :import_tasks, fn _user_id, _tasks ->
+        {:error, :invalid_tasks}
+      end)
+
+      conn = post(conn, ~p"/api/tasks/import", %{"file" => upload})
+
+      assert %{"error" => "Some tasks have invalid data"} = json_response(conn, 422)
+
+      File.rm(temp_file)
+    end
+
+    test "replaces existing tasks with same ID", %{conn: conn} do
+      tasks = [
+        %{
+          "id" => "existing-task",
+          "title" => "Updated Task",
+          "priority" => "high",
+          "status" => "completed"
+        }
+      ]
+
+      json_content = Jason.encode!(%{"tasks" => tasks})
+      {:ok, temp_file} = Plug.Upload.random_file("import")
+      File.write!(temp_file, json_content)
+
+      upload = %Plug.Upload{
+        path: temp_file,
+        filename: "tasks.json",
+        content_type: "application/json"
+      }
+
+      Repatch.patch(Tasks, :import_tasks, fn _user_id, _tasks ->
+        {:ok, %{imported: 1, added: 0, replaced: 1}}
+      end)
+
+      conn = post(conn, ~p"/api/tasks/import", %{"file" => upload})
+
+      assert %{"imported" => 1, "added" => 0, "replaced" => 1} = json_response(conn, 200)
+
+      File.rm(temp_file)
+    end
+  end
 end

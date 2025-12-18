@@ -11,6 +11,7 @@ defmodule SdbWeb.Router do
     pipe_through :api
 
     get "/tasks/export", TaskController, :export
+    post "/tasks/import", TaskController, :import
     resources "/tasks", TaskController, except: [:new, :edit]
   end
 end

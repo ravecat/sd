@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Modal from '@ebay/nice-modal-react';
 import type { Task, CreateTaskInput } from '~/shared/task/types';
 import { useTaskStore, useFilteredTasks } from '~/stores/task-store';
@@ -6,7 +6,7 @@ import { TaskList } from '~/features/tasks/list';
 import { TaskModal } from '~/features/tasks/modal';
 import { TaskFilter } from '~/features/tasks/filter';
 import { Button } from '~/components/ui/button';
-import { Plus, Loader2, Download } from 'lucide-react';
+import { Plus, Loader2, Download, Upload } from 'lucide-react';
 import { ThemeProvider } from '~/contexts/theme-context';
 import { ThemeToggle } from '~/components/theme-toggle';
 import { api } from '~/services/api';
@@ -68,6 +68,31 @@ export function App() {
     }
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await api.importTasks(file);
+      await fetchTasks();
+      alert(`Import successful: ${result.imported} tasks imported (${result.added} new, ${result.replaced} replaced)`);
+    } catch (err) {
+      console.error('Import failed:', err);
+      alert(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <ThemeProvider>
       <div className="min-h-screen bg-background">
@@ -93,6 +118,17 @@ export function App() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <TaskFilter value={filterStatus} onChange={setFilterStatus} />
             <div className="flex gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImport}
+                accept="application/json,.json"
+                className="hidden"
+              />
+              <Button variant="outline" onClick={handleImportClick}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import
+              </Button>
               <Button variant="outline" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-2" />
                 Export

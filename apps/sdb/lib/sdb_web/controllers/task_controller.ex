@@ -118,4 +118,69 @@ defmodule SdbWeb.TaskController do
     |> put_resp_header("content-disposition", ~s(attachment; filename="tasks.json"))
     |> send_resp(200, Jason.encode!(%{tasks: tasks}))
   end
+
+  @doc """
+  Import tasks for current user from uploaded JSON file
+  """
+  def import(conn, %{"file" => file}) do
+    user_id = conn.assigns.user_id
+
+    case File.read(file.path) do
+      {:ok, content} ->
+        case Jason.decode(content) do
+          {:ok, %{"tasks" => tasks}} when is_list(tasks) ->
+            import_tasks_data(conn, user_id, tasks)
+
+          {:ok, tasks} when is_list(tasks) ->
+            # Support direct array format
+            import_tasks_data(conn, user_id, tasks)
+
+          {:ok, _} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "Invalid JSON format. Expected {\"tasks\": [...]} or [...]"})
+
+          {:error, %Jason.DecodeError{} = error} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "Invalid JSON: #{Exception.message(error)}"})
+        end
+
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: "Failed to read file: #{inspect(reason)}"})
+    end
+  end
+
+  def import(conn, _params) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{error: "No file provided. Expected 'file' parameter."})
+  end
+
+  # Private helper for import
+  defp import_tasks_data(conn, user_id, tasks) do
+    case Tasks.import_tasks(user_id, tasks) do
+      {:ok, stats} ->
+        conn
+        |> put_status(:ok)
+        |> json(%{
+          message: "Tasks imported successfully",
+          imported: stats.imported,
+          added: stats.added,
+          replaced: stats.replaced
+        })
+
+      {:error, :invalid_tasks} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Some tasks have invalid data"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{error: to_string(reason)})
+    end
+  end
 end

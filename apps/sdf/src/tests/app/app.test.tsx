@@ -14,6 +14,7 @@ vi.mock('~/services/api', () => ({
     updateTask: vi.fn(),
     deleteTask: vi.fn(),
     exportTasks: vi.fn(),
+    importTasks: vi.fn(),
   },
 }));
 
@@ -338,5 +339,130 @@ describe('App Integration Tests', () => {
     await waitFor(() => {
       expect(mockApi.exportTasks).toHaveBeenCalledOnce();
     });
+  });
+
+  it('imports tasks from file', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    
+    mockApi.getTasks.mockResolvedValue([]);
+    mockApi.importTasks.mockResolvedValueOnce({
+      imported: 2,
+      added: 2,
+      replaced: 0,
+    });
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument();
+    });
+
+    const importButton = screen.getByRole('button', { name: /import/i });
+    expect(importButton).toBeInTheDocument();
+
+    // Create a mock file
+    const fileContent = JSON.stringify({
+      tasks: [
+        {
+          id: '1',
+          title: 'Imported Task 1',
+          priority: 'high',
+          status: 'pending',
+        },
+        {
+          id: '2',
+          title: 'Imported Task 2',
+          priority: 'low',
+          status: 'completed',
+        },
+      ],
+    });
+    const file = new File([fileContent], 'tasks.json', { type: 'application/json' });
+
+    // Click import button to trigger file input
+    await user.click(importButton);
+
+    // Find the hidden file input and upload the file
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeInTheDocument();
+
+    await user.upload(fileInput, file);
+
+    await waitFor(() => {
+      expect(mockApi.importTasks).toHaveBeenCalledWith(file);
+    });
+
+    await waitFor(() => {
+      expect(mockApi.getTasks).toHaveBeenCalledTimes(2); // Initial load + after import
+    });
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Import successful: 2 tasks imported (2 new, 0 replaced)')
+      );
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  it('handles import error gracefully', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    
+    mockApi.getTasks.mockResolvedValueOnce([]);
+    mockApi.importTasks.mockRejectedValueOnce(new Error('Invalid JSON format'));
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument();
+    });
+
+    const importButton = screen.getByRole('button', { name: /import/i });
+
+    const fileContent = '{ invalid json }';
+    const file = new File([fileContent], 'tasks.json', { type: 'application/json' });
+
+    await user.click(importButton);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, file);
+
+    await waitFor(() => {
+      expect(mockApi.importTasks).toHaveBeenCalledWith(file);
+    });
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Import failed: Invalid JSON format')
+      );
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  it('import button triggers file input', async () => {
+    const user = userEvent.setup();
+    mockApi.getTasks.mockResolvedValueOnce([]);
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading tasks...')).not.toBeInTheDocument();
+    });
+
+    const importButton = screen.getByRole('button', { name: /import/i });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    expect(fileInput).toBeInTheDocument();
+    expect(fileInput.accept).toBe('application/json,.json');
+    expect(fileInput.className).toContain('hidden');
+
+    const clickSpy = vi.spyOn(fileInput, 'click');
+    await user.click(importButton);
+
+    expect(clickSpy).toHaveBeenCalledOnce();
+    clickSpy.mockRestore();
   });
 });
